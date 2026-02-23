@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Blurry vs Clear Document Classifier</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
+    <style>
+        body {
+            font-family: Arial;
+            text-align: center;
+            margin: 40px;
+        }
+
+        img {
+            max-width: 320px;
+            margin-top: 16px;
+            border: 1px solid #ddd;
+        }
+
+        .result {
+            font-size: 18px;
+            margin-top: 18px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Document Quality Checker</h1>
+    <p>Upload a document image to check if it needs retake.</p>
+    <input type="file" id="imageUpload" accept="image/*" />
+    <br>
+    <img id="preview" />
+    <div class="result" id="result"></div>
+
+    <script>
+        const URL = "./model/";
+        let model;
+
+        async function loadModel() {
+            model = await tmImage.load(URL + "model.json", URL + "metadata.json");
+        }
+        loadModel();
+
+        document.getElementById("imageUpload").addEventListener("change", async function (event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = async function () {
+                const img = document.getElementById("preview");
+                img.src = reader.result;
+                img.onload = async function () {
+                    const prediction = await model.predict(img);
+                    let best = prediction[0];
+                    for (let i = 1; i < prediction.length; i++) {
+                        if (prediction[i].probability > best.probability) best = prediction[i];
+                    }
+                    document.getElementById("result").innerHTML =
+                        "Prediction: <b>" + best.className + "</b><br>Confidence: " +
+                        (best.probability * 100).toFixed(2) + "%";
+                };
+            };
+            reader.readAsDataURL(file);
+        });
+    </script>
+</body>
+
+</html>
