@@ -1,73 +1,107 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-    <meta charset="UTF-8">
-    <title>Blurry vs Clear Document Classifier</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
-    <style>
-        body {
-            font-family: Arial;
-            text-align: center;
-            margin: 40px;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Blurry vs Clear Document Classifier</title>
 
-        img {
-            max-width: 320px;
-            margin-top: 16px;
-            border: 1px solid #ddd;
-        }
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
 
-        .result {
-            font-size: 18px;
-            margin-top: 18px;
-        }
-    </style>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 40px; }
+    h1 { margin-bottom: 6px; }
+    p { margin-top: 0; color: #333; }
+    img { max-width: 360px; margin-top: 16px; border: 1px solid #ddd; border-radius: 6px; }
+    .result { font-size: 18px; margin-top: 18px; min-height: 48px; }
+  </style>
 </head>
 
 <body>
-    <h1>Document Quality Checker</h1>
-    <p>Upload a document image to check if it needs retake.</p>
-    <input type="file" id="imageUpload" accept="image/*" />
-    <br>
-    <img id="preview" />
-    <div class="result" id="result"></div>
+  <h1>Document Quality Checker</h1>
+  <p>Upload a document image to check if it needs retake.</p>
 
-    <script>
-  const URL = "./model/";
-  let model;
+  <input type="file" id="imageUpload" accept="image/*" />
+  <br />
+  <img id="preview" alt="" />
+  <div class="result" id="result">Loading model...</div>
 
-  const resultEl = document.getElementById("result");
-  resultEl.innerText = "Loading model...";
+  <script>
+    // IMPORTANT: keep your model files in ./model/
+    // ./model/model.json
+    // ./model/metadata.json
+    // ./model/weights.bin
+    const MODEL_DIR = "./model/";
+    const INPUT_SIZE = 224; // Teachable Machine image models typically use 224x224
 
-  (async () => {
-    model = await tmImage.load(URL + "model.json", URL + "metadata.json");
-    resultEl.innerText = "Model loaded. Upload an image.";
-  })();
+    const resultEl = document.getElementById("result");
+    const previewEl = document.getElementById("preview");
+    const uploadEl = document.getElementById("imageUpload");
 
-  document.getElementById("imageUpload").addEventListener("change", (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+    let model = null;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = document.getElementById("preview");
-      img.src = reader.result;
+    async function loadModel() {
+      try {
+        // If WebGL causes issues on some machines, uncomment these two lines:
+        // await tf.setBackend("cpu");
+        // await tf.ready();
 
-      img.onload = async () => {
+        model = await tmImage.load(MODEL_DIR + "model.json", MODEL_DIR + "metadata.json");
+        resultEl.innerText = "Model loaded. Upload an image.";
+      } catch (e) {
+        console.error(e);
+        resultEl.innerText = "Model load failed. Open console (F12) for details.";
+      }
+    }
+
+    function imageToCanvas(img, size = INPUT_SIZE) {
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      // Stretch to fit (simple + works reliably)
+      ctx.drawImage(img, 0, 0, size, size);
+      return canvas;
+    }
+
+    uploadEl.addEventListener("change", (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        previewEl.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    previewEl.onload = async () => {
+      if (!model) {
+        resultEl.innerText = "Model still loading... try again in 2 seconds.";
+        return;
+      }
+
+      try {
         resultEl.innerText = "Running prediction...";
 
-        const preds = await model.predict(img);
-        let best = preds.reduce((a,b) => (b.probability > a.probability ? b : a));
+        const canvas = imageToCanvas(previewEl, INPUT_SIZE);
+        const preds = await model.predict(canvas);
+
+        let best = preds[0];
+        for (let i = 1; i < preds.length; i++) {
+          if (preds[i].probability > best.probability) best = preds[i];
+        }
 
         resultEl.innerHTML =
-          `Prediction: <b>${best.className}</b><br>Confidence: ${(best.probability*100).toFixed(2)}%`;
-      };
+          `Prediction: <b>${best.className}</b><br>` +
+          `Confidence: ${(best.probability * 100).toFixed(2)}%`;
+      } catch (e) {
+        console.error(e);
+        resultEl.innerText = "Prediction failed. Open console (F12) for details.";
+      }
     };
-    reader.readAsDataURL(file);
-  });
-</script>
-</body>
 
-</html>  
+    loadModel();
+  </script>
+</body>
+</html>
