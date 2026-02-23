@@ -35,34 +35,39 @@
     <div class="result" id="result"></div>
 
     <script>
-        const URL = "./model/";
-        let model;
+  const URL = "./model/";
+  let model;
 
-        async function loadModel() {
-            model = await tmImage.load(URL + "model.json", URL + "metadata.json");
-        }
-        loadModel();
+  const resultEl = document.getElementById("result");
+  resultEl.innerText = "Loading model...";
 
-        document.getElementById("imageUpload").addEventListener("change", async function (event) {
-            const file = event.target.files[0];
-            const reader = new FileReader();
-            reader.onload = async function () {
-                const img = document.getElementById("preview");
-                img.src = reader.result;
-                img.onload = async function () {
-                    const prediction = await model.predict(img);
-                    let best = prediction[0];
-                    for (let i = 1; i < prediction.length; i++) {
-                        if (prediction[i].probability > best.probability) best = prediction[i];
-                    }
-                    document.getElementById("result").innerHTML =
-                        "Prediction: <b>" + best.className + "</b><br>Confidence: " +
-                        (best.probability * 100).toFixed(2) + "%";
-                };
-            };
-            reader.readAsDataURL(file);
-        });
-    </script>
+  (async () => {
+    model = await tmImage.load(URL + "model.json", URL + "metadata.json");
+    resultEl.innerText = "Model loaded. Upload an image.";
+  })();
+
+  document.getElementById("imageUpload").addEventListener("change", (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = document.getElementById("preview");
+      img.src = reader.result;
+
+      img.onload = async () => {
+        resultEl.innerText = "Running prediction...";
+
+        const preds = await model.predict(img);
+        let best = preds.reduce((a,b) => (b.probability > a.probability ? b : a));
+
+        resultEl.innerHTML =
+          `Prediction: <b>${best.className}</b><br>Confidence: ${(best.probability*100).toFixed(2)}%`;
+      };
+    };
+    reader.readAsDataURL(file);
+  });
+</script>
 </body>
 
 </html>  
